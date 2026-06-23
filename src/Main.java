@@ -1,6 +1,9 @@
 import models.*;
 import storage.BankData;
 import utils.InputHelper;
+import services.BankService;
+import exceptions.InsufficientFundsException;
+import services.TransactionService;
 
 public class Main {
     public static void main(String[] args) {
@@ -94,7 +97,66 @@ public class Main {
     }
 
     private static void showBankingMenu(Account acc) {
-        // Stub for Module 2
-        System.out.println("Banking menu coming in Module 2.");
+        String typeLabel = (acc instanceof SavingsAccount) ? "Savings Account" : "Current Account";
+        while (true) {
+            System.out.println();
+            System.out.println("============================");
+            System.out.printf("Welcome, %s (%s)%n", acc.getHolderName(), typeLabel);
+            System.out.println("============================");
+            System.out.println("1. Check Balance");
+            System.out.println("2. Deposit Money");
+            System.out.println("3. Withdraw Money");
+            System.out.println("4. Transfer Money");
+            System.out.println("5. Transaction History");
+            System.out.println("6. Calculate Interest");
+            System.out.println("7. Logout");
+
+            int choice = InputHelper.getInt("Enter choice: ");
+            switch (choice) {
+                case 1:
+                    BankService.checkBalance(acc);
+                    break;
+                case 2:
+                    double depositAmt = InputHelper.getPositiveDouble("Enter amount to deposit: ₹");
+                    try {
+                        BankService.deposit(acc, depositAmt);
+                    } catch (IllegalArgumentException e) {
+                        System.out.println(e.getMessage());
+                    }
+                    break;
+                case 3:
+                    double withdrawAmt = InputHelper.getPositiveDouble("Enter amount to withdraw: ₹");
+                    try {
+                        BankService.withdraw(acc, withdrawAmt);
+                    } catch (InsufficientFundsException e) {
+                        System.out.println(e.getMessage());
+                    } catch (IllegalArgumentException e) {
+                        System.out.println(e.getMessage());
+                    }
+                    break;
+                case 4:
+                    String toAcc = InputHelper.getString("Enter target account number: ");
+                    double transferAmt = InputHelper.getPositiveDouble("Enter amount to transfer: ₹");
+                    try {
+                        BankService.transfer(acc, toAcc, transferAmt);
+                    } catch (InsufficientFundsException e) {
+                        System.out.println(e.getMessage());
+                    } catch (IllegalArgumentException e) {
+                        System.out.println(e.getMessage());
+                    }
+                    break;
+                case 5:
+                    TransactionService.printHistory(acc);
+                    break;
+                case 6:
+                    BankService.calculateAndShowInterest(acc);
+                    break;
+                case 7:
+                    System.out.printf("Logged out. Goodbye, %s.%n", acc.getHolderName());
+                    return; // breaks the loop and returns to main menu
+                default:
+                    System.out.println("Invalid option. Try again.");
+            }
+        }
     }
 }
