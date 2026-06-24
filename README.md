@@ -17,7 +17,6 @@ A terminal-based banking application built with core Java, demonstrating real-wo
 - [Exception Handling](#exception-handling)
 - [Data Persistence](#data-persistence)
 - [Technologies Used](#technologies-used)
-- [Future Improvements](#future-improvements)
 
 ---
 
