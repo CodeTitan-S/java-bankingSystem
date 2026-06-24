@@ -3,8 +3,12 @@ package services;
 import models.Account;
 import models.SavingsAccount;
 import models.CurrentAccount;
+import models.Transaction;
 import storage.BankData;
 import exceptions.InsufficientFundsException;
+import java.util.List;
+import java.time.Month;
+import java.time.format.DateTimeFormatter;
 
 public class BankService {
 
@@ -18,12 +22,10 @@ public class BankService {
         }
         acc.deposit(amount);
         TransactionService.logDeposit(acc, amount);
-        System.out.printf("₹%.2f deposited. New balance: ₹%.2f%n",
-                amount, acc.getBalance());
+        System.out.printf("₹%.2f deposited. New balance: ₹%.2f%n", amount, acc.getBalance());
     }
 
-    public static void withdraw(Account acc, double amount)
-            throws InsufficientFundsException {
+    public static void withdraw(Account acc, double amount) throws InsufficientFundsException {
         if (amount <= 0) {
             throw new IllegalArgumentException("Withdrawal amount must be greater than zero.");
         }
@@ -32,8 +34,7 @@ public class BankService {
         }
         acc.withdraw(amount);
         TransactionService.logWithdrawal(acc, amount);
-        System.out.printf("₹%.2f withdrawn. Remaining balance: ₹%.2f%n",
-                amount, acc.getBalance());
+        System.out.printf("₹%.2f withdrawn. Remaining balance: ₹%.2f%n", amount, acc.getBalance());
     }
 
     public static void transfer(Account sender, String receiverAccNo, double amount)
@@ -70,8 +71,42 @@ public class BankService {
         } else {
             rateLabel = "unknown";
         }
-        System.out.printf("Annual interest on ₹%.2f = ₹%.2f%n",
-                acc.getBalance(), interest);
+        System.out.printf("Annual interest on ₹%.2f = ₹%.2f%n", acc.getBalance(), interest);
         System.out.println("  (Rate: " + rateLabel + ")");
+    }
+
+    // NEW METHOD – Monthly Statement
+    public static void showMonthlyStatement(Account acc, int month, int year) {
+        List<Transaction> list = acc.getTransactionHistory();
+        if (list.isEmpty()) {
+            System.out.println("No transactions.");
+            return;
+        }
+        double totalDeposits = 0, totalWithdrawals = 0;
+        int counter = 0;
+        String monthName = Month.of(month).name();
+        monthName = monthName.charAt(0) + monthName.substring(1).toLowerCase();
+        System.out.println("\n=== Statement: " + monthName + " " + year + " ===");
+        for (Transaction t : list) {
+            if (t.getDateTime().getMonthValue() == month && t.getDateTime().getYear() == year) {
+                counter++;
+                System.out.printf("[%d]. %s ₹%.2f — %s%n",
+                        counter, t.getType(), t.getAmount(),
+                        t.getDateTime().format(DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm")));
+                if (t.getType().equalsIgnoreCase("Deposit") || t.getType().equalsIgnoreCase("Transfer In")) {
+                    totalDeposits += t.getAmount();
+                } else if (t.getType().equalsIgnoreCase("Withdrawal") || t.getType().equalsIgnoreCase("Transfer Out")) {
+                    totalWithdrawals += t.getAmount();
+                }
+            }
+        }
+        if (counter == 0) {
+            System.out.println("No transactions for this period.");
+        } else {
+            System.out.println("──────────────────────────────");
+            System.out.printf("Total Deposits:    ₹%.2f%n", totalDeposits);
+            System.out.printf("Total Withdrawals: ₹%.2f%n", totalWithdrawals);
+            System.out.printf("Net Change:        ₹%.2f%n", totalDeposits - totalWithdrawals);
+        }
     }
 }

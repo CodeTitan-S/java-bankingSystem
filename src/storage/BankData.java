@@ -5,10 +5,10 @@ import java.util.HashMap;
 import java.util.Collection;
 
 public class BankData {
-    private static HashMap<String, Account> accounts = new HashMap<>();
-    private static int lastAccountNumber = 1000;
+    // package-private for FileManager (same package)
+    static HashMap<String, Account> accounts = new HashMap<>();
+    static int lastAccountNumber = 1000;
 
-    // Private constructor to prevent instantiation (optional)
     private BankData() {}
 
     public static String generateAccountNumber() {
@@ -30,5 +30,10 @@ public class BankData {
 
     public static boolean accountExists(String accountNumber) {
         return accounts.containsKey(accountNumber);
+    }
+
+    // New public method for deleting an account
+    public static void removeAccount(String accountNumber) {
+        accounts.remove(accountNumber);
     }
 }

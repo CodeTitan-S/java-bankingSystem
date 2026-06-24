@@ -1,14 +1,25 @@
 import models.*;
 import storage.BankData;
+import storage.FileManager;
 import utils.InputHelper;
 import services.BankService;
-import exceptions.InsufficientFundsException;
 import services.TransactionService;
+import exceptions.InsufficientFundsException;
+import features.ATMMode;
+import features.AdminPanel;
+import features.FDCalculator;
 
 public class Main {
     public static void main(String[] args) {
+        FileManager.loadData();
+
         while (true) {
-            showMainMenu();
+            System.out.println("\n===== BANK SYSTEM =====");
+            System.out.println("[1] Create Account");
+            System.out.println("[2] Login");
+            System.out.println("[3] ATM Mode");
+            System.out.println("[4] Admin Panel");
+            System.out.println("[5] Exit");
             int choice = InputHelper.getInt("Choose an option: ");
             switch (choice) {
                 case 1:
@@ -18,25 +29,24 @@ public class Main {
                     handleLogin();
                     break;
                 case 3:
+                    ATMMode.launch();
+                    break;
+                case 4:
+                    AdminPanel.launch();
+                    break;
+                case 5:
                     System.out.println("Goodbye!");
+                    FileManager.saveData();
                     System.exit(0);
                 default:
-                    System.out.println("Invalid option. Please enter 1, 2, or 3.");
+                    System.out.println("Invalid option. Please enter 1-5.");
             }
         }
-    }
-
-    private static void showMainMenu() {
-        System.out.println("\n===== BANK SYSTEM =====");
-        System.out.println("[1] Create Account");
-        System.out.println("[2] Login");
-        System.out.println("[3] Exit");
     }
 
     private static void handleCreateAccount() {
         System.out.println("\n--- Create New Account ---");
 
-        // 1. Get holder name (cannot be blank)
         String name;
         while (true) {
             name = InputHelper.getString("Enter full name: ");
@@ -44,7 +54,6 @@ public class Main {
             System.out.println("Name cannot be blank.");
         }
 
-        // 2. Choose account type (1 = Savings, 2 = Current)
         int type;
         while (true) {
             type = InputHelper.getInt("Account type: [1] Savings  [2] Current: ");
@@ -52,7 +61,6 @@ public class Main {
             System.out.println("Please choose 1 or 2.");
         }
 
-        // 3. Set PIN (exactly 4 digits, numeric)
         String pin;
         while (true) {
             pin = InputHelper.getString("Create a 4-digit PIN: ");
@@ -60,7 +68,6 @@ public class Main {
             System.out.println("PIN must be exactly 4 digits (0-9).");
         }
 
-        // 4. Confirm PIN
         String confirmPin;
         while (true) {
             confirmPin = InputHelper.getString("Confirm PIN: ");
@@ -68,7 +75,6 @@ public class Main {
             System.out.println("PINs do not match. Please try again.");
         }
 
-        // 5. Generate account number and create the appropriate subclass
         String accNumber = BankData.generateAccountNumber();
         Account newAccount;
         if (type == 1) {
@@ -77,8 +83,8 @@ public class Main {
             newAccount = new CurrentAccount(accNumber, name, pin);
         }
 
-        // 6. Store and confirm
         BankData.addAccount(newAccount);
+        FileManager.saveData();                 // <-- persistence
         System.out.println("Account created! Account Number: " + accNumber);
     }
 
@@ -88,12 +94,28 @@ public class Main {
         String pin = InputHelper.getString("Enter PIN: ");
 
         Account account = BankData.getAccount(accNumber);
-        if (account != null && account.validatePin(pin)) {
-            System.out.println("Welcome, " + account.getHolderName() + ".");
-            showBankingMenu(account);
-        } else {
+        if (account == null) {
             System.out.println("Invalid credentials. Please try again.");
+            return;
         }
+        if (account.isLocked()) {
+            System.out.println("Account " + accNumber + " is locked. Contact admin.");
+            return;
+        }
+        if (!account.validatePin(pin)) {
+            account.incrementFailedAttempts();
+            if (account.isLocked()) {
+                System.out.println("Account locked after 3 failed attempts.");
+            } else {
+                System.out.println("Invalid credentials. Please try again.");
+            }
+            FileManager.saveData();             // save lock state
+            return;
+        }
+        account.resetFailedAttempts();
+        FileManager.saveData();                 // reset saved as well
+        System.out.println("Welcome, " + account.getHolderName() + ".");
+        showBankingMenu(account);
     }
 
     private static void showBankingMenu(Account acc) {
@@ -109,51 +131,73 @@ public class Main {
             System.out.println("4. Transfer Money");
             System.out.println("5. Transaction History");
             System.out.println("6. Calculate Interest");
-            System.out.println("7. Logout");
+            System.out.println("7. Monthly Statement");
+            System.out.println("8. Fixed Deposit Calculator");
+            System.out.println("9. Logout");
 
             int choice = InputHelper.getInt("Enter choice: ");
             switch (choice) {
                 case 1:
                     BankService.checkBalance(acc);
                     break;
-                case 2:
-                    double depositAmt = InputHelper.getPositiveDouble("Enter amount to deposit: ₹");
+                case 2: {
+                    double depAmt = InputHelper.getPositiveDouble("Enter amount to deposit: ₹");
                     try {
-                        BankService.deposit(acc, depositAmt);
+                        BankService.deposit(acc, depAmt);
+                        FileManager.saveData();
                     } catch (IllegalArgumentException e) {
                         System.out.println(e.getMessage());
                     }
                     break;
-                case 3:
-                    double withdrawAmt = InputHelper.getPositiveDouble("Enter amount to withdraw: ₹");
+                }
+                case 3: {
+                    double wAmt = InputHelper.getPositiveDouble("Enter amount to withdraw: ₹");
                     try {
-                        BankService.withdraw(acc, withdrawAmt);
+                        BankService.withdraw(acc, wAmt);
+                        FileManager.saveData();
                     } catch (InsufficientFundsException e) {
                         System.out.println(e.getMessage());
                     } catch (IllegalArgumentException e) {
                         System.out.println(e.getMessage());
                     }
                     break;
-                case 4:
+                }
+                case 4: {
                     String toAcc = InputHelper.getString("Enter target account number: ");
-                    double transferAmt = InputHelper.getPositiveDouble("Enter amount to transfer: ₹");
+                    double tAmt = InputHelper.getPositiveDouble("Enter amount to transfer: ₹");
                     try {
-                        BankService.transfer(acc, toAcc, transferAmt);
+                        BankService.transfer(acc, toAcc, tAmt);
+                        FileManager.saveData();
                     } catch (InsufficientFundsException e) {
                         System.out.println(e.getMessage());
                     } catch (IllegalArgumentException e) {
                         System.out.println(e.getMessage());
                     }
                     break;
+                }
                 case 5:
                     TransactionService.printHistory(acc);
                     break;
                 case 6:
                     BankService.calculateAndShowInterest(acc);
                     break;
-                case 7:
+                case 7: {
+                    int month = InputHelper.getInt("Enter month (1-12): ");
+                    int year = InputHelper.getInt("Enter year (e.g. 2026): ");
+                    if (month < 1 || month > 12) {
+                        System.out.println("Invalid month.");
+                        break;
+                    }
+                    BankService.showMonthlyStatement(acc, month, year);
+                    break;
+                }
+                case 8:
+                    FDCalculator.launch();
+                    break;
+                case 9:
                     System.out.printf("Logged out. Goodbye, %s.%n", acc.getHolderName());
-                    return; // breaks the loop and returns to main menu
+                    FileManager.saveData();
+                    return;
                 default:
                     System.out.println("Invalid option. Try again.");
             }
